@@ -46,15 +46,19 @@ class AgentResponse(BaseModel):
 llm = ChatOllama(
     model="qwen3:14b",
     temperature=0.0,
-    num_ctx=8192,
-    timeout=120,
 )
+
+# Structured LLM only for post-processing
+structured_llm = ChatOllama(
+    model="qwen3:14b",
+    temperature=0.0,
+).with_structured_output(AgentResponse)
+
 # tools = [search]
-tools = [TavilySearch(max_results=3, time_range="month")]
+tools = [TavilySearch()]
 agent = create_agent(
     model=llm,
     tools=tools,
-    response_format=AgentResponse,
     system_prompt="You MUST use the available search tools to answer questions. Never answer from memory. Always search first.",
 )
 
@@ -66,12 +70,23 @@ def main():
         {
             "messages": [
                 HumanMessage(
-                    content="search for only top 3 job postings in the bay area on linkedin and list their details for an ai engineer that needs langchain skill"
+                    content="""Search for top 3 job postings for an AI Engineer requiring LangChain skills 
+    in the San Francisco Bay Area. For each job list:
+    - Job title
+    - Company
+    - Location
+    - Key requirements
+    - The direct URL to the job posting"""
                 )
             ]
         }
     )
-    print(result)
+    raw_answer = result["messages"][-1].content
+    structured: AgentResponse = structured_llm.invoke(
+        f"Extract the answer and any source URLs from this:\n\n{raw_answer}"
+    )
+    
+    print(structured)
 
 
 if __name__ == "__main__":
